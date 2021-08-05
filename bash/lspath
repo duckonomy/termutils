@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+shopt -s extglob
+
+# local IFS pattern
+IFS='|'
+pattern="*@($*)*"
+IFS=':'
+for d in $PATH; do
+  for x in "$d/"$pattern; do
+    [ "$x" = "$d/$pattern" ] || echo "${x##*/}"
+  done
+done | sort -u
+

@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+
+export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
+
+# export FZF_DEFAULT_OPTS='--bind ctrl-f:page-down,ctrl-b:page-up'
+launch_window=`tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}'`
+TMUX_CURRENT_PATH=`tmux display -p '#{pane_current_path}'`
+
+if [ $1 -eq 1 ];
+then
+  replace_current=1
+else
+  replace_current=0
+fi
+
+exit_if_no_target=0
+
+width=${2:-80%}
+height=${2:-80%}
+
+# shopt -s extglob
+
+# lspath () {
+#   local IFS pattern
+#   IFS='|'
+#   pattern="*@($*)*"
+#   IFS=':'
+#   for d in $PATH; do
+#     for x in "$d/"$pattern; do
+#       [ "$x" = "$d/$pattern" ] || echo "${x##*/}"
+#     done
+#   done | sort -u
+# }
+
+id=$RANDOM
+cmd_file="${TMPDIR:-/tmp}/fzf-cmd-file-$id"
+target_file="${TMPDIR:-/tmp}/fzf-target-file-$id"
+fzf_temp_file="${TMPDIR:-/tmp}/fzf-temp-file-$id"
+
+me_lspath=lspath
+me_executable="fzf --layout=reverse --bind ctrl-d:page-down,ctrl-u:page-up,ctrl-k:kill-line"
+me_target=$fzf_temp_file
+me_command="${me_lspath} | ${me_executable} > ${cmd_file}"
+
+if [ "$(tmux display-message -p -F "#{session_name}")" = "popup" ];then
+    tmux detach-client
+else
+    # tmux popup -d '#{pane_current_path}' -xC -yC -w$width -h$height -E "tmux attach -t popup || tmux new -s popup"
+    # tmux popup -d '#{pane_current_path}' -xC -yC -w$width -h$height -E "eval $me_command"
+    tmux popup -d `prj $TMUX_CURRENT_PATH` -xC -yC -w$width -h$height -E "eval $me_command"
+fi
+
+executable=`cat $cmd_file`
+
+clean_cmd="command rm -f $cmd_file $target_file $fzf_temp_file"
+
+cleanup() {
+    eval "$clean_cmd"
+}
+
+trap 'cleanup' EXIT
+
+case $executable in
+  "nvim" | "nano" | "llpp" | "qimgv" | "mpv")
+    # fzf > $target_file
+    new_cmd="$me_executable > $target_file"
+    if [ "$(tmux display-message -p -F "#{session_name}")" = "popup" ];then
+        tmux detach-client
+    else
+        # tmux popup -d '#{pane_current_path}' -xC -yC -w$width -h$height -E "eval $new_cmd"
+        tmux popup -d `prj $TMUX_CURRENT_PATH` -xC -yC -w$width -h$height -E "eval $new_cmd"
+    fi
+    exit_if_no_target=1
+  ;;
+  "grep-file")
+    me_executable=grep-file
+    executable=nvim
+    if [ "$(tmux display-message -p -F "#{session_name}")" = "popup" ];then
+        tmux detach-client
+    else
+        # tmux popup -d '#{pane_current_path}' -xC -yC -w$width -h$height -E "eval $me_executable"
+        tmux popup -d `prj $TMUX_CURRENT_PATH` -xC -yC -w$width -h$height -E "eval $me_executable"
+    fi
+  ;;
+  # "fzf" | "cd" | "ls")
+  #   current_dir=`pwd`
+  #   if [ "$(tmux display-message -p -F "#{session_name}")" = "popup" ];then
+  #       tmux detach-client
+  #   else
+  #       tmux popup -d '#{pane_current_path}' -xC -yC -w$width -h$height -E "eval $new_cmd"
+  #   fi
+  # ;;
+  *)
+    eval $executable
+  ;;
+esac
+
+
+if [ -s $target_file ];
+then
+  target=`cat $target_file`
+  target=`printf "%q" "$target"`
+  # echo $target > ~/cools
+  cmd="$executable $target; zsh"
+  # echo $cmd >> ~/cools
+else
+  if [ $exit_if_no_target -eq 1 ];
+  then
+    exit 0
+  fi
+  if [ $me_executable="rfv" ];
+  then
+    me_file=`cat ${TMPDIR:-/tmp}/rfv-file | head -1`
+    me_line=`cat ${TMPDIR:-/tmp}/rfv-file | tail -1`
+    executable="$executable $me_file +$me_line"
+    cmd="$executable; zsh"
+    # echo $executable > ~/cools
+
+    if [ -z $me_file ];
+    then
+      exit 0
+    else
+      rm ${TMPDIR:-/tmp}/rfv-file
+    fi
+  else
+    cmd="$executable; zsh"
+  fi
+fi
+
+
+if [ "$executable" != "" ];
+then
+  if [ $replace_current -eq 1 ];
+  then
+    # tmux respawn-pane -t $launch_window -k "eval $cmd"; exit
+    tmux respawn-pane -t $launch_window -k "$cmd"; exit
+  else
+    if [ $(($(tmux display -p '7*#{pane_width}-20*#{pane_height}'))) -lt 0 ];
+    then
+      # tmux splitw -v -c '#{pane_current_path}' "$cmd"; exit
+      tmux splitw -v -c `prj $TMUX_CURRENT_PATH` "$cmd"; exit
+    else
+      # tmux splitw -h -c '#{pane_current_path}' "$cmd"; exit
+      tmux splitw -h -c `prj $TMUX_CURRENT_PATH` "$cmd"; exit
+    fi
+  fi
+fi
+

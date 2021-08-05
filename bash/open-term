@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+TMUX_CURRENT_PATH=`tmux display -p '#{pane_current_path}'`
+TMUX_CMD=zsh
+if [ ! -z "$2" ];
+then
+  TMUX_CMD=$2
+fi
+
+if [ $# -eq 0 ];
+then
+  echo "No setting provided!"
+else
+  if [ $1 -eq 1 ];
+  then
+    if [ $(($(tmux display -p '7*#{pane_width}-20*#{pane_height}'))) -lt 0 ];
+    then
+      tmux splitw -v -c `prj $TMUX_CURRENT_PATH` "$TMUX_CMD"; exit
+    else
+      tmux splitw -h -c `prj $TMUX_CURRENT_PATH` "$TMUX_CMD"; exit
+    fi
+  elif [ $1 -eq 2 ];
+  then
+    tmux splitw -h -c `prj $TMUX_CURRENT_PATH` "$TMUX_CMD"; exit
+  else
+    tmux splitw -v -c `prj $TMUX_CURRENT_PATH` "$TMUX_CMD"; exit
+  fi
+fi

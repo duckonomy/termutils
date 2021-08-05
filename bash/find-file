@@ -1,0 +1,90 @@
+#!/usr/bin/env zsh
+
+# TODO
+# 1. Refactor directory handling mechanism for else and ctrl-j
+# 2. Add search history
+# 3. Incorporate z or fasd for jumping
+# 4. Create a bookmark feature as well (separate script)
+
+trap 'exit' SIGINT
+
+INIT_DIR=$PWD
+CURRENT_DIR=$INIT_DIR
+
+while true
+do
+  FILE_LIST=".\n..\n$(find $CURRENT_DIR -maxdepth 1 -not -path $CURRENT_DIR)"
+  FZF_COMMAND=`echo $FILE_LIST | fzf --prompt="$CURRENT_DIR/" --query="$q" --print-query --expect=ctrl-j,ctrl-l,ctrl-d --delimiter / --with-nth=-1`
+
+  target_name=`echo $FZF_COMMAND | sed -n 1p`
+  # Add tab and backspace(when empty) and ~ and .. and - (this needs some kind of a history)
+  target_key=`echo $FZF_COMMAND | sed -n 2p`
+  target_path=`echo $FZF_COMMAND | sed -n 3p`
+
+  if [[ ! -z $target_key && $target_key = "ctrl-l" ]];
+  then
+    # cd ..
+    CURRENT_DIR=`dirname $CURRENT_DIR`
+  elif [[ ! -z $target_key && $target_key = "ctrl-j" ]];
+  then
+    if [[ ! -z $target_name && -z $target_path ]];
+    then
+      nvim $CURRENT_DIR/$target_name
+      break
+    else
+      if [[ ! -z $target_path && -e $target_path ]];
+      then
+        if [ -d $target_path ];
+        then
+          if [[ $target_path = ".." ]];
+          then
+            CURRENT_DIR=`dirname $CURRENT_DIR`
+          elif [[ $target_path = "." ]];
+          then
+            CURRENT_DIR=$CURRENT_DIR 
+          else
+            CURRENT_DIR=$target_path
+          fi
+        elif [ -f $target_path ];
+        then
+          nvim $target_path
+          break
+        fi
+      else
+        nvim $target_path
+        break
+      fi
+    fi
+  elif [[ ! -z $target_key && $target_key = "ctrl-d" ]];
+  then
+    break
+  else
+    if [[ ! -z $target_name && -z $target_path ]];
+    then
+      nvim $CURRENT_DIR/$target_name
+      break
+    else
+      if [[ ! -z $target_path && -e $target_path ]];
+      then
+        if [ -d $target_path ];
+        then
+          if [[ $target_path = ".." ]];
+          then
+            CURRENT_DIR=`dirname $CURRENT_DIR`
+          elif [[ $target_path = "." ]];
+          then
+            CURRENT_DIR=$CURRENT_DIR 
+          else
+            CURRENT_DIR=$target_path
+          fi
+        elif [ -f $target_path ];
+        then
+          nvim $target_path
+          break
+        fi
+      else
+        break
+      fi
+    fi
+  fi
+done
